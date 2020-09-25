@@ -21,7 +21,7 @@ You need to have python 3.8.5 version.
 Create `.env` file near with connection string to database
 
     ```# .env
-    DATABASE_URI=postgres://user:password@host/database_name
+    DATABASE_URI=postgres://user:password@host/database_name?ssl=True
     ```
 
 Alternatively you can pass this as env var before running the script.
@@ -53,6 +53,8 @@ async def init():
         db_url=database_uri,
         modules={'models': []}
     )
+
+    await Tortoise.generate_schemas()
 
 
 async def fetch_transactions_for_transfer_receipt_by_block_height(block_height):
