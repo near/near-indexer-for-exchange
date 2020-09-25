@@ -27,7 +27,7 @@ Create `.env` file near with connection string to database
 Alternatively you can pass this as env var before running the script.
 
     ```
-    DATABASE_URI=postgres://user:password@host/database_name python transfer.py <block_height>
+    DATABASE_URI="postgres://user:password@host/database_name?ssl=True" python transfer.py <block_height>
     ```
 """
 
@@ -71,22 +71,14 @@ async def fetch_transactions_for_transfer_receipt_by_block_height(block_height):
             SELECT * FROM receipt_action_actions
             INNER JOIN receipts ON receipt_action_actions.receipt_id = receipts.receipt_id
             INNER JOIN execution_outcomes ON execution_outcomes.receipt_id = receipts.receipt_id
+            INNER JOIN transactions ON transactions.transaction_hash = receipts.transaction_hash
             WHERE receipt_action_actions.action_kind = 'TRANSFER' 
                 AND receipts.predecessor_id != 'system' 
                 AND receipts.block_height = {block_height}
             """
     )
 
-    transactions = []
-    for receipt in response:
-        tx_count, transaction = await conn.execute_query(
-            f"""
-                SELECT * FROM transactions
-                WHERE transaction_hash = '{receipt.get("transaction_hash")}'
-                """
-        )
-        if tx_count > 0:
-            transactions.append(dict(zip(transaction[0].keys(), transaction[0].values())))
+    transactions = [dict(r) for r in response]
 
     return transactions
 
