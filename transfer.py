@@ -68,25 +68,57 @@ async def fetch_transactions_for_transfer_receipt_by_block_height(block_height):
 
     _, response = await conn.execute_query(
         f"""
-            SELECT * FROM receipt_action_actions
+            SELECT (
+                transactions.*
+            ) FROM receipt_action_actions
             INNER JOIN receipts ON receipt_action_actions.receipt_id = receipts.receipt_id
             INNER JOIN execution_outcomes ON execution_outcomes.receipt_id = receipts.receipt_id
             INNER JOIN transactions ON transactions.transaction_hash = receipts.transaction_hash
             WHERE receipt_action_actions.action_kind = 'TRANSFER' 
                 AND receipts.predecessor_id != 'system' 
                 AND receipts.block_height = {block_height}
-            """
+        """
     )
 
-    transactions = [dict(r) for r in response]
+    # TODO: Consider to optimize separate queries
+    transactions = []
+    for tx in response:
+        transaction = dict(tx)
+
+        _, tx_actions = await conn.execute_query(
+            f"""
+            SELECT * FROM transaction_actions
+            WHERE transaction_hash = '{transaction['transaction_hash']}'
+            """
+        )
+
+        transaction['actions'] = [dict(action) for action in tx_actions]
+
+        receipts = []
+        _, tx_receipts = await conn.execute_query(
+            f"""
+            SELECT * FROM receipts
+            JOIN receipt_actions ON receipt_actions.receipt_id = receipts.receipt_id
+            JOIN execution_outcomes ON execution_outcomes.receipt_id = receipts.receipt_id
+            WHERE receipts.transaction_hash = '{transaction['transaction_hash']}'
+            """
+        )
+        for rec in tx_receipts:
+            receipt = dict(rec)
+
+            _, r_actions = await conn.execute_query(
+                f"""SELECT * FROM receipt_action_actions WHERE receipt_id = '{receipt['receipt_id']}' ORDER BY index ASC"""
+            )
+            receipt['actions'] = [dict(action) for action in r_actions]
+            receipts.append(receipt)
+
+        transaction['receipts'] = receipts
+        transactions.append({'transaction': transaction})
 
     return transactions
 
 
 async def run():
-    """
-
-    """
     try:
         block_height = sys.argv[1]
     except KeyError:
